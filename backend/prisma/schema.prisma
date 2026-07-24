@@ -1,0 +1,239 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  characters Character[]
+  campaigns  Campaign[]
+  combats    Combat[]
+  inventory  Inventory[]
+}
+
+model Character {
+  id        String   @id @default(cuid())
+  name      String
+  class     String
+  race      String
+  level     Int      @default(1)
+  experience Int     @default(0)
+  health    Int
+  maxHealth Int
+  mana      Int
+  maxMana   Int
+  stats     Stats?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+
+  skills      Skill[]
+  inventory   Inventory[]
+  combats     Combat[]
+  achievements Achievement[]
+}
+
+model Stats {
+  id        String   @id @default(cuid())
+  strength  Int      @default(10)
+  dexterity Int      @default(10)
+  constitution Int   @default(10)
+  intelligence Int   @default(10)
+  wisdom    Int      @default(10)
+  charisma  Int      @default(10)
+  armor     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  characterId String    @unique
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model Skill {
+  id        String   @id @default(cuid())
+  name      String
+  description String?
+  cooldown  Int      @default(0)
+  manaCost  Int      @default(0)
+  damage    Int      @default(0)
+  createdAt DateTime @default(now())
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model Item {
+  id        String   @id @default(cuid())
+  name      String
+  description String?
+  type      String   // weapon, armor, consumable, etc.
+  rarity    String   @default("common")
+  value     Int      @default(0)
+  stats     Json?
+  createdAt DateTime @default(now())
+
+  inventory Inventory[]
+}
+
+model Inventory {
+  id        String   @id @default(cuid())
+  quantity  Int      @default(1)
+  equipped  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, itemId])
+}
+
+model Campaign {
+  id        String   @id @default(cuid())
+  name      String
+  description String?
+  world     String?  // Description du monde ouvert
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  masterUserId String
+  master       User   @relation(fields: [masterUserId], references: [id], onDelete: Cascade)
+
+  characters Character[]
+  encounters Encounter[]
+  combats    Combat[]
+}
+
+model Encounter {
+  id        String   @id @default(cuid())
+  name      String
+  description String?
+  location  String?
+  enemies   Enemy[]
+  difficulty String  @default("normal")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  combats Combat[]
+}
+
+model Enemy {
+  id        String   @id @default(cuid())
+  name      String
+  health    Int
+  maxHealth Int
+  stats     Json
+  createdAt DateTime @default(now())
+
+  encounterId String
+  encounter   Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  combats CombatParticipant[]
+}
+
+model Combat {
+  id        String   @id @default(cuid())
+  status    String   @default("pending") // pending, active, finished
+  turn      Int      @default(0)
+  winner    String?  // characterId or enemyId
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  encounterId String?
+  encounter   Encounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  participants CombatParticipant[]
+  actions     CombatAction[]
+  characterCombats CharacterCombat[]
+}
+
+model CombatParticipant {
+  id        String   @id @default(cuid())
+  type      String   // "character" or "enemy"
+  health    Int
+  maxHealth Int
+  order     Int      // Initiative order
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  combatId String
+  combat   Combat @relation(fields: [combatId], references: [id], onDelete: Cascade)
+
+  characterId String?
+  character   Character? @relation(fields: [characterId], references: [id])
+
+  enemyId String?
+  enemy   Enemy? @relation(fields: [enemyId], references: [id])
+}
+
+model CharacterCombat {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  combatId String
+  combat   Combat @relation(fields: [combatId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, combatId])
+}
+
+model CombatAction {
+  id        String   @id @default(cuid())
+  type      String   // "attack", "skill", "defend", "item"
+  actionName String?
+  damage    Int      @default(0)
+  targetId  String?
+  success   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  combatId String
+  combat   Combat @relation(fields: [combatId], references: [id], onDelete: Cascade)
+}
+
+model Achievement {
+  id        String   @id @default(cuid())
+  name      String
+  description String?
+  icon      String?
+  unlockedAt DateTime
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, name])
+}
